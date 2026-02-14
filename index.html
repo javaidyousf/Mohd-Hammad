@@ -96,7 +96,8 @@
   async function startTeacher() {
       try {
           // Force use of 1.5-flash-8b (The most 'free' and stable version available)
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-8b" });
+          // CHANGE THIS LINE:
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
           chatSession = model.startChat({
               history: [],
               generationConfig: { maxOutputTokens: 500 },
