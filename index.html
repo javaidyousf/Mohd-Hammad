@@ -79,11 +79,11 @@
       { "imports": { "@google/generative-ai": "https://esm.run/@google/generative-ai" } }
     </script>
 
-    <script type="module">
+   <script type="module">
   import { GoogleGenerativeAI } from "@google/generative-ai";
 
-  // 1. REPLACED KEY - Paste your BRAND NEW key inside the quotes below
-  const API_KEY = "AIzaSyB9kumHhG7XuKGboqL9Mce-ThLEFz9J7ps"; 
+  // 1. CONFIG - Ensure this is your NEWEST API Key
+  const API_KEY = "PASTE_YOUR_NEW_API_KEY_HERE"; 
   const genAI = new GoogleGenerativeAI(API_KEY);
   
   let chatSession = null;
@@ -92,67 +92,72 @@
 
   document.getElementById("points").innerText = `${hammadPoints} XP`;
 
-  // 2. STABLE INITIALIZATION
+  // 2. TEACHER INITIALIZATION
   async function startTeacher() {
       try {
-          // Force use of 1.5-flash-8b (The most 'free' and stable version available)
-          // CHANGE THIS LINE:
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          // Use the standard stable model name
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
           chatSession = model.startChat({
               history: [],
-              generationConfig: { maxOutputTokens: 500 },
+              generationConfig: { maxOutputTokens: 800 },
           });
 
-          const intro = "You are a friendly Grade 5 tutor for Mohammad Hammad Bhat at Birla Open Minds school. Greet him and ask what he wants to learn today.";
+          const intro = "You are a friendly Grade 5 tutor for Mohammad Hammad Bhat at Birla Open Minds school. Greet him and ask what he wants to study today.";
           const result = await chatSession.sendMessage(intro);
           renderMessage("Teacher", result.response.text());
       } catch (err) {
-          console.error("Critical Error:", err);
-          // If even 1.5-flash fails, it's a regional or network block
-          renderMessage("System", "Teacher is in a meeting. Please try again in 1 minute.");
+          console.error("Startup Error:", err);
+          if (err.message.includes('429')) {
+              renderMessage("System", "The classroom is full! Please wait 1 minute and refresh the page.");
+          } else {
+              renderMessage("System", "Teacher is preparing the lesson. Please refresh the page.");
+          }
       }
   }
 
-  // 3. GLOBAL ASSIGNMENT (Fixes the 'not defined' error)
+  // 3. ACTIONS
   window.askGemini = async function() {
       const inputField = document.getElementById("userInput");
       const input = inputField.value.trim();
+      const status = document.getElementById("ai-status");
       if (!input) return;
 
-      document.getElementById("ai-status").style.display = "block";
+      status.style.display = "block";
       
       try {
           if (!chatSession) await startTeacher();
           const result = await chatSession.sendMessage(input);
           const responseText = result.response.text();
 
+          // Award XP for engagement
+          updateXP(5);
+          
           renderMessage("Teacher", responseText);
           inputField.value = "";
       } catch (e) {
-          console.error(e);
-          // Check specifically for the 429 quota error
+          console.error("Chat Error:", e);
           if (e.message.includes('429')) {
-              renderMessage("System", "Daily limit reached. Let's study from your books for a bit and come back later!");
+              renderMessage("System", "You've reached the daily limit. Let's try again in a little while!");
           } else {
-              renderMessage("System", "Connection error. Please check your internet.");
+              renderMessage("System", "Connection lost. Please check your internet and try again.");
           }
       } finally {
-          document.getElementById("ai-status").style.display = "none";
+          status.style.display = "none";
       }
   };
 
   window.triggerQuiz = () => {
-      document.getElementById("userInput").value = "Give me a 3-question quiz!";
+      document.getElementById("userInput").value = "Can you give me a fun quiz about Science?";
       window.askGemini();
   };
 
-  // 4. UI FUNCTIONS
+  // 4. UI HELPERS
   function renderMessage(sender, text) {
       const output = document.getElementById("output");
       const div = document.createElement("div");
       div.className = "message-bubble";
       div.innerHTML = `
-          <div style="display:flex; justify-content:space-between;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
               <strong style="color:var(--primary); font-size:0.8rem;">${sender.toUpperCase()}</strong>
               <button class="btn-voice" onclick="window.speak(this)">🔊 Listen</button>
           </div>
@@ -168,6 +173,18 @@
       window.speechSynthesis.speak(utter);
   }
 
-  // BOOTSTRAP
+  function updateXP(amount) {
+      hammadPoints += amount;
+      localStorage.setItem('hammadXP', hammadPoints);
+      document.getElementById("points").innerText = `${hammadPoints} XP`;
+  }
+
+  // Set the subject for the AI
+  window.setSubject = (subj) => {
+      document.getElementById("userInput").value = `I want to study ${subj} today!`;
+      window.askGemini();
+  }
+
+  // START
   window.onload = startTeacher;
 </script>
