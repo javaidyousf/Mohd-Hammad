@@ -82,93 +82,76 @@
     <script type="module">
   import { GoogleGenerativeAI } from "@google/generative-ai";
 
-  // 1. CONFIG - Using 1.5 Flash for better quota stability
-  const API_KEY = "AIzaSyB9kumHhG7XuKGboqL9Mce-ThLEFz9J7ps"; 
+  // 1. REPLACED KEY - Paste your BRAND NEW key inside the quotes below
+  const API_KEY = "PASTE_YOUR_NEW_KEY_HERE"; 
   const genAI = new GoogleGenerativeAI(API_KEY);
   
   let chatSession = null;
   let hammadPoints = parseInt(localStorage.getItem('hammadXP') || '0');
   let sessionHistory = JSON.parse(localStorage.getItem('hammadSession') || '[]');
 
-  // Update UI with saved points immediately
   document.getElementById("points").innerText = `${hammadPoints} XP`;
 
-  // 2. VOICE SETUP
-  const synth = window.speechSynthesis;
-  function populateVoices() {
-      const select = document.getElementById('voiceSelect');
-      const voices = synth.getVoices();
-      select.innerHTML = voices
-        .filter(v => v.lang.includes('en'))
-        .map(v => `<option value="${v.name}">${v.name}</option>`).join('');
-  }
-  if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = populateVoices;
-
-  // 3. TEACHER LOGIC
+  // 2. STABLE INITIALIZATION
   async function startTeacher() {
-      // CHANGED TO 1.5-FLASH TO FIX THE 429 ERROR
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      chatSession = model.startChat({
-          history: [],
-          generationConfig: { maxOutputTokens: 800 },
-      });
-
-      const intro = "You are Hammad's personal tutor for Grade 5. Greet Mohammad Hammad Bhat warmly and ask about his day at Birla Open Minds school.";
-      
       try {
-        const result = await chatSession.sendMessage(intro);
-        renderMessage("Teacher", result.response.text());
+          // Force use of 1.5-flash-8b (The most 'free' and stable version available)
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-8b" });
+          chatSession = model.startChat({
+              history: [],
+              generationConfig: { maxOutputTokens: 500 },
+          });
+
+          const intro = "You are a friendly Grade 5 tutor for Mohammad Hammad Bhat at Birla Open Minds school. Greet him and ask what he wants to learn today.";
+          const result = await chatSession.sendMessage(intro);
+          renderMessage("Teacher", result.response.text());
       } catch (err) {
-        console.error(err);
-        renderMessage("System", "Teacher is resting. Please refresh in a minute!");
+          console.error("Critical Error:", err);
+          // If even 1.5-flash fails, it's a regional or network block
+          renderMessage("System", "Teacher is in a meeting. Please try again in 1 minute.");
       }
   }
 
-  // 4. FIXING THE BUTTON CONNECTION
-  // We attach the function directly to the window so the HTML button can find it
+  // 3. GLOBAL ASSIGNMENT (Fixes the 'not defined' error)
   window.askGemini = async function() {
-    const inputField = document.getElementById("userInput");
-    const input = inputField.value;
-    const status = document.getElementById("ai-status");
-    if (!input) return;
+      const inputField = document.getElementById("userInput");
+      const input = inputField.value.trim();
+      if (!input) return;
 
-    status.style.display = "block";
-    try {
-        if (!chatSession) await startTeacher();
-        
-        const result = await chatSession.sendMessage(input);
-        const responseText = result.response.text();
+      document.getElementById("ai-status").style.display = "block";
+      
+      try {
+          if (!chatSession) await startTeacher();
+          const result = await chatSession.sendMessage(input);
+          const responseText = result.response.text();
 
-        // Save progress
-        sessionHistory.push({ topic: input, date: new Date().toLocaleDateString() });
-        localStorage.setItem('hammadSession', JSON.stringify(sessionHistory));
-
-        if(responseText.toLowerCase().includes("correct") || responseText.toLowerCase().includes("well done")) {
-            updateXP(15);
-        }
-
-        status.style.display = "none";
-        renderMessage("Teacher", responseText);
-        inputField.value = "";
-    } catch (e) {
-        status.style.display = "none";
-        renderMessage("System", "Error: The AI is busy. Try again in 30 seconds.");
-    }
+          renderMessage("Teacher", responseText);
+          inputField.value = "";
+      } catch (e) {
+          console.error(e);
+          // Check specifically for the 429 quota error
+          if (e.message.includes('429')) {
+              renderMessage("System", "Daily limit reached. Let's study from your books for a bit and come back later!");
+          } else {
+              renderMessage("System", "Connection error. Please check your internet.");
+          }
+      } finally {
+          document.getElementById("ai-status").style.display = "none";
+      }
   };
 
-  // 5. ATTACHING THE QUIZ FUNCTION
-  window.triggerQuiz = function() {
-      document.getElementById("userInput").value = "Can we do a quick quiz on what we just learned?";
+  window.triggerQuiz = () => {
+      document.getElementById("userInput").value = "Give me a 3-question quiz!";
       window.askGemini();
   };
 
-  // UI RENDERERS
+  // 4. UI FUNCTIONS
   function renderMessage(sender, text) {
       const output = document.getElementById("output");
       const div = document.createElement("div");
       div.className = "message-bubble";
       div.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div style="display:flex; justify-content:space-between;">
               <strong style="color:var(--primary); font-size:0.8rem;">${sender.toUpperCase()}</strong>
               <button class="btn-voice" onclick="window.speak(this)">🔊 Listen</button>
           </div>
@@ -178,19 +161,12 @@
   }
 
   window.speak = (btn) => {
-      synth.cancel();
+      window.speechSynthesis.cancel();
       const text = btn.parentElement.nextElementSibling.innerText;
       const utter = new SpeechSynthesisUtterance(text);
-      utter.voice = synth.getVoices().find(v => v.name === document.getElementById('voiceSelect').value);
-      synth.speak(utter);
+      window.speechSynthesis.speak(utter);
   }
 
-  function updateXP(amount) {
-      hammadPoints += amount;
-      localStorage.setItem('hammadXP', hammadPoints);
-      document.getElementById("points").innerText = `${hammadPoints} XP`;
-  }
-
-  // Initialize
+  // BOOTSTRAP
   window.onload = startTeacher;
 </script>
