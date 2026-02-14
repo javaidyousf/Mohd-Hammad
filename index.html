@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hammad's AI Study Hub | Birla Open Minds</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root { --primary: #00d2ff; --bg: #0b1120; --card: #1e293b; --text: #f8fafc; --ai-glow: #8b5cf6; --success: #10b981; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; min-height: 100vh; overflow: hidden; }
+        
+        /* Sidebar Styles */
+        .sidebar { width: 320px; background: #0f172a; padding: 25px; border-right: 1px solid #334155; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+        .sidebar h2 { color: var(--primary); font-size: 1.1rem; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-top: 20px; }
+        .xp-card { background: linear-gradient(135deg, #8b5cf6, #d946ef); padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3); }
+        .nav-item { padding: 10px; color: #94a3b8; cursor: pointer; border-radius: 8px; transition: 0.3s; font-size: 0.9rem; }
+        .nav-item:hover { background: var(--card); color: white; }
+
+        /* Main Content Styles */
+        .main { flex: 1; padding: 40px; overflow-y: auto; display: flex; flex-direction: column; }
+        .search-area { background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        .input-group { display: flex; gap: 10px; }
+        input { flex: 1; padding: 15px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: white; font-size: 1rem; }
+        
+        button { padding: 12px 20px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 8px; }
+        .btn-ai { background: var(--ai-glow); color: white; }
+        .btn-quiz { background: #f59e0b; color: white; }
+        .btn-report { background: #334155; color: white; margin-top: auto; }
+        .btn-voice { background: var(--success); color: white; font-size: 0.8rem; padding: 5px 12px; }
+
+        /* Chat Output */
+        #output { flex: 1; }
+        .message-bubble { background: #1e293b; border-radius: 15px; padding: 25px; margin-bottom: 20px; border-left: 5px solid var(--primary); animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .loading { color: var(--primary); font-style: italic; display: none; margin-bottom: 10px; }
+        .voice-select { background: #0f172a; color: white; border: 1px solid #334155; border-radius: 5px; padding: 5px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div id="xp-display" class="xp-card">
+            <div style="font-size: 0.8rem; opacity: 0.9;">Hammad's Study Rank</div>
+            <div id="points" style="font-size: 1.5rem; font-weight: bold;">0 XP</div>
+        </div>
+
+        <h2>📖 Subjects</h2>
+        <div class="nav-item" onclick="setSubject('Math')">🔢 Mathematics</div>
+        <div class="nav-item" onclick="setSubject('Science')">🧬 Science</div>
+        <div class="nav-item" onclick="setSubject('Social Studies')">🌍 Social Studies</div>
+
+        <h2>📋 Parent's Tools</h2>
+        <button class="btn-report" onclick="generateParentReport()">View Progress Report</button>
+        <p style="font-size: 0.7rem; color: #64748b; margin-top: 15px; text-align: center;">Birla Open Minds | Zanskar Section</p>
+    </div>
+
+    <div class="main">
+        <div class="search-area">
+            <div class="input-group">
+                <input type="text" id="userInput" placeholder="Hi Hammad! What did you learn in school today?">
+                <button class="btn-ai" onclick="askGemini()">Talk to Teacher ✨</button>
+                <button class="btn-quiz" onclick="triggerQuiz()">Start Quiz 🎮</button>
+            </div>
+            <div style="margin-top: 15px; display: flex; align-items: center; gap: 15px;">
+                <span style="font-size: 0.8rem;">Teacher's Voice:</span>
+                <select id="voiceSelect" class="voice-select"></select>
+            </div>
+        </div>
+
+        <div id="ai-status" class="loading">Teacher is thinking... 🧠</div>
+        
+        <div id="output">
+            </div>
+    </div>
+
+    <script type="importmap">
+      { "imports": { "@google/generative-ai": "https://esm.run/@google/generative-ai" } }
+    </script>
+
+    <script type="module">
+      import { GoogleGenerativeAI } from "@google/generative-ai";
+
+      // 1. API CONFIGURATION
+      const API_KEY = "AIzaSyA2WkyIVbtws8h_VWwbetw0qT-bnX2-_fQ"; 
+      const genAI = new GoogleGenerativeAI(API_KEY);
+      
+      let chatSession = null;
+      let hammadPoints = parseInt(localStorage.getItem('hammadXP') || '0');
+      let sessionHistory = JSON.parse(localStorage.getItem('hammadSession') || '[]');
+
+      // 2. VOICE INITIALIZATION
+      const synth = window.speechSynthesis;
+      function populateVoices() {
+          const select = document.getElementById('voiceSelect');
+          const voices = synth.getVoices();
+          select.innerHTML = voices
+            .filter(v => v.lang.includes('en'))
+            .map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+      }
+      populateVoices();
+      if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = populateVoices;
+
+      // 3. TEACHER CORE LOGIC
+      async function startTeacher() {
+          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          chatSession = model.startChat({
+              history: [],
+              generationConfig: { maxOutputTokens: 1000 },
+          });
+
+          const intro = `You are Hammad's personal tutor for Grade 5. 
+          First, greet Mohammad Hammad Bhat warmly and ask about his day at Birla Open Minds school. 
+          Ask if he has homework or a specific topic to study. 
+          Crucial: If he says he understands a topic, you MUST ask him ONE check-in question to prove it.`;
+          
+          const result = await chatSession.sendMessage(intro);
+          renderMessage("Teacher", result.response.text());
+          updateXP(0);
+      }
+
+      window.askGemini = async function() {
+        const input = document.getElementById("userInput").value;
+        const status = document.getElementById("ai-status");
+        if (!input) return;
+
+        status.style.display = "block";
+        try {
+            if (!chatSession) await startTeacher();
+            
+            const result = await chatSession.sendMessage(input);
+            const responseText = result.response.text();
+
+            // Store topic for report
+            if(input.length > 5) {
+                sessionHistory.push({ topic: input, date: new Date().toLocaleDateString() });
+                localStorage.setItem('hammadSession', JSON.stringify(sessionHistory));
+            }
+
+            // XP Logic: Rewards for correct answers or understanding
+            if(responseText.toLowerCase().includes("correct") || responseText.toLowerCase().includes("well done")) {
+                updateXP(15);
+            }
+
+            status.style.display = "none";
+            renderMessage("Teacher", responseText);
+            document.getElementById("userInput").value = "";
+        } catch (e) {
+            status.style.display = "none";
+            renderMessage("System", "Error: Make sure your API Key is valid!");
+        }
+      }
+
+      window.triggerQuiz = async function() {
+          document.getElementById("userInput").value = "Can we do a quick quiz on what we just learned?";
+          askGemini();
+      }
+
+      function renderMessage(sender, text) {
+          const output = document.getElementById("output");
+          const div = document.createElement("div");
+          div.className = "message-bubble";
+          div.innerHTML = `
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                  <strong style="color:var(--primary); font-size:0.8rem;">${sender.toUpperCase()}</strong>
+                  <button class="btn-voice" onclick="speak(this)">🔊 Listen</button>
+              </div>
+              <div class="content">${marked.parse(text)}</div>
+          `;
+          output.prepend(div);
+      }
+
+      window.speak = (btn) => {
+          synth.cancel();
+          const text = btn.parentElement.nextElementSibling.innerText;
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.voice = synth.getVoices().find(v => v.name === document.getElementById('voiceSelect').value);
+          utter.rate = 0.9;
+          synth.speak(utter);
+      }
+
+      function updateXP(amount) {
+          hammadPoints += amount;
+          localStorage.setItem('hammadXP', hammadPoints);
+          document.getElementById("points").innerText = `${hammadPoints} XP`;
+      }
+
+      window.generateParentReport = () => {
+          const reportHTML = `
+              <div id="report-content" style="background:white; color:black; padding:40px; border-radius:10px;">
+                  <h1 style="color:#8b5cf6;">Birla Open Minds Progress Report</h1>
+                  <p><strong>Student:</strong> Mohammad Hammad Bhat</p>
+                  <p><strong>Total XP:</strong> ${hammadPoints}</p>
+                  <hr>
+                  <h3>Study History:</h3>
+                  <ul>${sessionHistory.map(s => `<li>${s.date}: ${s.topic}</li>`).join('')}</ul>
+                  <button onclick="window.print()" style="margin-top:20px; padding:10px;">Download PDF / Print</button>
+                  <button onclick="location.reload()" style="margin-top:20px; padding:10px;">Back to Hub</button>
+              </div>
+          `;
+          document.body.innerHTML = reportHTML;
+      }
+
+      // Initialize on load
+      window.onload = startTeacher;
+    </script>
+</body>
+</html>
