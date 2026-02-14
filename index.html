@@ -93,24 +93,30 @@
   document.getElementById("points").innerText = `${hammadPoints} XP`;
 
   // 2. TEACHER INITIALIZATION
+  // 3. UPDATED TEACHER LOGIC
   async function startTeacher() {
       try {
-          // Use the standard stable model name
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          // Use 1.5-flash (Universal)
+          const model = genAI.getGenerativeModel({ 
+              model: "gemini-1.5-flash"
+          });
+
           chatSession = model.startChat({
               history: [],
               generationConfig: { maxOutputTokens: 800 },
           });
 
-          const intro = "You are a friendly Grade 5 tutor for Mohammad Hammad Bhat at Birla Open Minds school. Greet him and ask what he wants to study today.";
+          // Adding a small delay to ensure connection is stable
+          const intro = "Hi! I am your teacher. Greet Mohammad Hammad Bhat.";
           const result = await chatSession.sendMessage(intro);
           renderMessage("Teacher", result.response.text());
       } catch (err) {
-          console.error("Startup Error:", err);
-          if (err.message.includes('429')) {
-              renderMessage("System", "The classroom is full! Please wait 1 minute and refresh the page.");
+          console.error("Connection Debug:", err);
+          // This tells us if it's a browser block or a quota issue
+          if (err.message.includes('fetch')) {
+              renderMessage("System", "Browser blocked the connection. Try disabling Ad-Blockers or use Incognito.");
           } else {
-              renderMessage("System", "Teacher is preparing the lesson. Please refresh the page.");
+              renderMessage("System", "Teacher is busy. Please refresh in 30 seconds.");
           }
       }
   }
